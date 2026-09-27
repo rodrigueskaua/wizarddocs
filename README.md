@@ -95,16 +95,6 @@ curl localhost:8001/api/query/ -H 'content-type: application/json' \
 
 Documentação completa dos schemas em `/docs` (Swagger).
 
-## Roadmap
-
-- [ ] Busca híbrida (BM25 + vetores) para termos exatos como códigos e números de contrato
-- [ ] Reranker sobre os trechos recuperados
-- [ ] Conjunto de perguntas com gabarito para avaliação automatizada de qualidade
-- [ ] OCR para PDFs escaneados
-- [ ] Autenticação e isolamento de documentos por usuário
-- [ ] Streaming da resposta
-- [ ] CI no GitHub Actions (lint, testes e build)
-
 ## Desenvolvimento
 
 ### Pré-requisitos
@@ -147,18 +137,6 @@ Sem nenhuma chave de LLM configurada, a API sobe normalmente: upload, listagem e
 cd backend && pytest
 ```
 
-O LLM é substituído por um dublê nos testes — nada chama API paga. Só o download inicial do modelo de embeddings local precisa de rede.
-
 ### Configuração
 
 Variáveis de ambiente em `backend/.env` (veja `.env.example` para a lista completa e os valores padrão): chaves de `OPENAI_API_KEY`/`GEMINI_API_KEY`, `EMBEDDING_PROVIDER` (`local` ou `gemini`), tamanho de chunk, limiar de relevância e `MONGO_URI` para persistir os resumos.
-
-## Limitações conhecidas
-
-- Sem autenticação: todos os documentos ficam num índice compartilhado.
-- PDFs escaneados não têm texto extraível e são recusados — não há OCR.
-- Busca só vetorial; termos exatos se beneficiariam de busca híbrida.
-
-## Licença
-
-MIT

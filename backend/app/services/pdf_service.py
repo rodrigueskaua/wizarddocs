@@ -1,33 +1,58 @@
-from PyPDF2 import PdfReader
-import re
+import hashlib
 
-def extract_text_from_pdf(pdf_file) -> str:
+from pypdf import PdfReader
+
+def file_sha256(pdf_file) -> str:
+  digest = hashlib.sha256()
+  for block in iter(lambda: pdf_file.read(1024 * 1024), b""):
+    digest.update(block)
+  pdf_file.seek(0)
+  return digest.hexdigest()
+
+def extract_pages(pdf_file) -> list[tuple[int, str]]:
+  """Devolve (número da página, texto) de cada página que tem texto extraível."""
   reader = PdfReader(pdf_file)
-  full_text = []
+  pages = []
 
-  for page in reader.pages:
-    page_text = page.extract_text()
-    if page_text:
-      full_text.append(page_text)
+  for number, page in enumerate(reader.pages, start=1):
+    text = (page.extract_text() or "").strip()
+    if text:
+      pages.append((number, text))
 
-  return "\n".join(full_text).strip()
+  return pages
 
-  
-def split_text_into_chunks(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
-  words = re.split(r'(\s+)', text)  # Mantém os espaços entre as palavras
+def build_chunks(pages: list[tuple[int, str]], chunk_size: int, overlap: int) -> list[dict]:
+  """Divide cada página separadamente, para que todo trecho aponte para uma única página."""
+  return [
+    {"text": text, "page": number}
+    for number, page_text in pages
+    for text in split_text_into_chunks(page_text, chunk_size, overlap)
+  ]
+
+def split_text_into_chunks(text: str, chunk_size: int = 1000, overlap: int = 150) -> list[str]:
+  """Divide o texto em trechos de até chunk_size caracteres, sempre cortando entre palavras.
+
+  Cada trecho começa repetindo as últimas palavras do anterior (até overlap caracteres),
+  para que uma frase dividida na fronteira ainda apareça inteira em algum trecho.
+  """
   chunks = []
-  current_chunk = ""
-  
-  for word in words:
-    if len(current_chunk) + len(word) <= chunk_size:
-      current_chunk += word
-    else:
-      chunks.append(current_chunk.strip())
-      # Próximo chunk com a sobreposição
-      overlap_part = current_chunk[-overlap:] if overlap < len(current_chunk) else current_chunk
-      current_chunk = overlap_part + word
+  current = []
 
-  if current_chunk:
-    chunks.append(current_chunk.strip())
-  
+  for word in text.split():
+    if current and len(" ".join(current + [word])) > chunk_size:
+      chunks.append(" ".join(current))
+      current = _overlap_tail(current, overlap)
+    current.append(word)
+
+  if current:
+    chunks.append(" ".join(current))
+
   return chunks
+
+def _overlap_tail(words: list[str], overlap: int) -> list[str]:
+  tail = []
+  for word in reversed(words):
+    if len(" ".join([word] + tail)) > overlap:
+      break
+    tail.insert(0, word)
+  return tail

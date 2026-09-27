@@ -1,7 +1,0 @@
-chromadb
-sentence-transformers
-PyPDF2
-transformers
-fastapi
-uvicorn
-python-dotenv

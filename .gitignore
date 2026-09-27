@@ -3,10 +3,8 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.pyc
-*.pyo
-*.pyd
 *.db
+.pytest_cache/
 
 # Ignora arquivos de ambiente
 .env
@@ -15,3 +13,5 @@ venv/
 env/
 
 chroma_data/
+chroma_db/
+/backend/data/

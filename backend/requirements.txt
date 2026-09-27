@@ -1,0 +1,10 @@
+fastapi>=0.115
+uvicorn[standard]
+python-dotenv
+python-multipart
+pypdf>=6,<7
+chromadb>=1.5,<2
+sentence-transformers>=6,<7
+openai>=3,<4
+google-genai>=2,<3
+motor>=3,<4

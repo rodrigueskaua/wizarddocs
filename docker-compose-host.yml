@@ -1,0 +1,40 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.host
+    container_name: frontend
+    ports:
+      - "8080:80"
+    restart: always
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.host
+    container_name: backend
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./backend/data/chromadb:/data/chromadb
+      - hf-cache:/root/.cache
+    env_file:
+      - ./backend/.env
+    environment:
+      CHROMADB_DIR: /data/chromadb
+      MONGO_URI: mongodb://mongo:27017
+    restart: always
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:7
+    container_name: mongo
+    volumes:
+      - ./backend/data/mongo:/data/db
+    restart: always
+
+volumes:
+  hf-cache:

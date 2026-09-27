@@ -10,7 +10,7 @@
       <br><br>
       Comece enviando um documento!
     </p>
-    <button class="btn btn-purple hover:bg-purple-700 text-white py-2 px-5 rounded-3 transition">
+    <button class="btn btn-purple hover:bg-purple-700 text-white py-2 px-5 rounded-3 transition" @click="$router.push('/chat')">
       Próximo
     </button>
     <DotsNavigation class="mt-4" />

@@ -1,44 +1,58 @@
+import re
+from typing import Optional
+
+from core.config import settings
 from database.chromadb import retrieve_relevant_chunks
-from services.embedding_service import generate_embeddings_batch
-from services.ai_service import ask_openai
+from llm import LLMProvider, get_provider
+from services.embedding_service import embed_query
+from services.prompts import (
+  ANSWER_SYSTEM, CONDENSE_SYSTEM, NOT_FOUND_ANSWER, answer_prompt, condense_prompt
+)
 
-def _clean_chunks(relevant_chunks):
-  return [
-    {
-      "text": ' '.join(chunk.replace("\n", " ").split()),
-      "distance": round(distance, 4)
-    }
-    for chunk, distance in relevant_chunks
-  ]
+CITATION_MARKER = re.compile(r"\[(\d+)\]")
+MAX_HISTORY_MESSAGES = 6
 
-def _get_context_from_chunks(clean_chunks):
-  return " ".join(chunk["text"] for chunk in clean_chunks)
+def query_knowledge_base(
+  question: str,
+  provider: str = "local",
+  top_k: int = 5,
+  source: Optional[str] = None,
+  history: Optional[list[dict]] = None
+) -> dict:
+  llm = None if provider == "local" else get_provider(provider)
+  history = (history or [])[-MAX_HISTORY_MESSAGES:]
 
-def query_knowledge_base(question: str, provider: str = "local", top_k: int = 5):
-  query_embedding = generate_embeddings_batch(question)
-  relevant_chunks = retrieve_relevant_chunks("pdf_data", query_embedding, top_k=top_k)
-  
-  clean_chunks = _clean_chunks(relevant_chunks)
-  context = _get_context_from_chunks(clean_chunks)
+  search_query = _condense(llm, question, history) if llm and history else question
+  retrieved = retrieve_relevant_chunks(embed_query(search_query), top_k=top_k, source=source)
+  relevant = [chunk for chunk in retrieved if chunk["distance"] <= settings.max_distance]
 
-  if provider == "local":
-    return {
-      "question": question,
-      "answer": context,
-      "source": "ChromaDB",
-      "top_k": top_k,
-      "chunks": clean_chunks
-    }
-
-  elif provider == "openai":
-    answer = ask_openai(question, context)
-    return {
-      "question": question,
-      "answer": answer,
-      "source": "OpenAI",
-      "top_k": top_k,
-      "chunks": clean_chunks
-    }
-
+  if llm is None:
+    answer = "\n\n".join(chunk["text"] for chunk in relevant) or NOT_FOUND_ANSWER
+    citations = [{"index": i, **chunk} for i, chunk in enumerate(relevant, start=1)]
+  elif not relevant:
+    answer, citations = NOT_FOUND_ANSWER, []
   else:
-      raise ValueError("Provedor inválido. Use 'local' ou 'openai'.")
+    answer = llm.generate(ANSWER_SYSTEM, answer_prompt(search_query, relevant))
+    citations = _cited_chunks(answer, relevant)
+
+  return {
+    "answer": answer,
+    "grounded": bool(citations),
+    "provider": provider,
+    "model": llm.model if llm else None,
+    "search_query": search_query,
+    "citations": citations,
+    "retrieved_chunks": [
+      {**chunk, "relevant": chunk["distance"] <= settings.max_distance} for chunk in retrieved
+    ]
+  }
+
+def _condense(llm: LLMProvider, question: str, history: list[dict]) -> str:
+  return llm.generate(CONDENSE_SYSTEM, condense_prompt(question, history), max_tokens=256)
+
+def _cited_chunks(answer: str, chunks: list[dict]) -> list[dict]:
+  """Só os trechos que o modelo realmente citou com [n] viram citação."""
+  used = sorted({
+    int(number) for number in CITATION_MARKER.findall(answer) if 1 <= int(number) <= len(chunks)
+  })
+  return [{"index": number, **chunks[number - 1]} for number in used]

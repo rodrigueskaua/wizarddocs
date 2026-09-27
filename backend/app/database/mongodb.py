@@ -1,6 +1,8 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from core.config import settings
 
-client = AsyncIOMotorClient(settings.mongo_uri)
-db = client["pdf_documents"]
-collection = db["summaries"]
+collection = None
+
+if settings.mongo_uri:
+  client = AsyncIOMotorClient(settings.mongo_uri)
+  collection = client["pdf_documents"]["summaries"]

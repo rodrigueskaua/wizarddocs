@@ -1,49 +1,59 @@
-from fastapi import APIRouter, Body, HTTPException, status
-from fastapi.responses import JSONResponse
+import logging
+
+from fastapi import APIRouter, HTTPException, status
+from fastapi.concurrency import run_in_threadpool
+
+from core.config import settings
+from llm import LLMError, LLMNotConfiguredError, configured_providers, default_provider, get_provider
+from models.schemas import ProvidersResponse, QueryRequest, QueryResponse
 from services.query_service import query_knowledge_base
-from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.post("/query/")
-async def query_pdf_data(body: dict = Body(...)):
-  question = body.get("question")
-  top_k = body.get("top_k", 5)
-  provider = body.get("provider", "local")
-
-  if not question:
-    return JSONResponse(
-      status_code=status.HTTP_400_BAD_REQUEST,
-      content={
-        "message": "Requisição inválida.",
-        "error": "A chave 'question' é obrigatória no corpo da requisição."
-      }
-    )
+@router.post("/query/", response_model=QueryResponse)
+async def query_pdf_data(body: QueryRequest):
+  provider = body.provider or default_provider() or "local"
 
   try:
-    result = query_knowledge_base(question, provider=provider, top_k=top_k)
-    
-    return JSONResponse(
-      status_code=status.HTTP_200_OK,
-      content={
-        "success": True,
-        "summary": {
-          "answer": result["answer"],
-          "source": result["source"],
-          "top_k_used": result["top_k"],
-          "retrieved_chunks": result["chunks"]
-        },
-        "meta": {
-          "query": result["question"],
-          "retrieved_at": datetime.utcnow().isoformat() + "Z"
-        }
-      }
+    return await run_in_threadpool(
+      query_knowledge_base,
+      body.question,
+      provider,
+      body.top_k,
+      body.source,
+      [message.model_dump() for message in body.history]
     )
-  except Exception as e:
-    return JSONResponse(
+  except LLMNotConfiguredError:
+    raise HTTPException(
+      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+      detail=f"O provedor '{provider}' não está configurado. Veja GET /api/providers/."
+    )
+  except LLMError:
+    logger.exception("Falha no provedor %s", provider)
+    raise HTTPException(
+      status_code=status.HTTP_502_BAD_GATEWAY,
+      detail=f"Falha ao consultar o provedor '{provider}'. Tente novamente ou use outro provedor."
+    )
+  except Exception:
+    logger.exception("Falha ao responder a pergunta")
+    raise HTTPException(
       status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-      content={
-        "message": "Erro interno.",
-        "error": str(e)
-      }
+      detail="Erro interno ao processar a pergunta."
     )
+
+@router.get("/providers/", response_model=ProvidersResponse)
+async def list_providers():
+  embedding_model = (
+    settings.gemini_embedding_model if settings.embedding_provider == "gemini" else settings.embedding_model
+  )
+  return {
+    "default": default_provider() or "local",
+    "available": [
+      {"name": "local", "model": embedding_model},
+      *({"name": name, "model": get_provider(name).model} for name in configured_providers())
+    ],
+    "embedding_provider": settings.embedding_provider,
+    "embedding_model": embedding_model
+  }

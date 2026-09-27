@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   frontend:
     build:
@@ -20,18 +18,23 @@ services:
     ports:
       - "8001:8000"
     volumes:
-      - ./backend/app:/app
+      - ./backend/data/chromadb:/data/chromadb
+      - hf-cache:/root/.cache
     env_file:
       - ./backend/.env
+    environment:
+      CHROMADB_DIR: /data/chromadb
+      MONGO_URI: mongodb://mongo:27017
     restart: always
     depends_on:
-      - chromadb
+      - mongo
 
-  chromadb:
-    image: ghcr.io/chroma-core/chroma:latest
-    container_name: chromadb
-    ports:
-      - "8000:8000"
+  mongo:
+    image: mongo:7
+    container_name: mongo
     volumes:
-      - ./backend/data/chromadb:/data/chromadb
+      - ./backend/data/mongo:/data/db
     restart: always
+
+volumes:
+  hf-cache:

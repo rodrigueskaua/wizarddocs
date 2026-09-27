@@ -1,4 +1,4 @@
-<img src="docs/screenshots/welcome.png" alt="WizardDocs" width="72" height="72">
+<img src="docs/screenshots/icon.png" alt="WizardDocs" width="72" height="72">
 
 # WizardDocs
 

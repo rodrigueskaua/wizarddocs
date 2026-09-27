@@ -1,7 +1,7 @@
-from sentence_transformers import SentenceTransformer
+from services.embedders import get_embedder
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
+def embed_documents(texts: list[str]) -> list[list[float]]:
+  return get_embedder().embed_documents(texts)
 
-def generate_embeddings_batch(texts: list[str]) -> list[list[float]]:
-  embeddings = model.encode(texts)
-  return [e.tolist() for e in embeddings]
+def embed_query(text: str) -> list[float]:
+  return get_embedder().embed_query(text)
